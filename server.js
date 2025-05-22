@@ -6,7 +6,7 @@ import { HttpsProxyAgent } from 'https-proxy-agent';
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// 認証付きHTTPSプロキシの情報
+// アイフィルターのURL
 const proxyUrl = 'http://579DA4DFB3XXcYxyCF:UBz7uCZi1HYs@daatc-2975.px.digitalartscloud.com:443';
 
 app.use(cors());
