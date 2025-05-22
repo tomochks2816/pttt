@@ -1,0 +1,28 @@
+{
+  "name": "pttt",
+  "version": "1.0.0",
+  "description": "",
+  "type": "module",       
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/siawaseok3/pttt.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/siawaseok3/pttt/issues"
+  },
+  "homepage": "https://github.com/siawaseok3/pttt#readme",
+  "dependencies": {
+    "axios": "^1.9.0",
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "https-proxy-agent": "^7.0.6"
+  }
+}
