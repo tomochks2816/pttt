@@ -8,109 +8,75 @@ import { fileURLToPath } from 'url';
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// __dirname を ESM で使うための設定
+// __dirname 対応（ESM）
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
 // プロキシサーバーURL（必要に応じて環境変数化推奨）
 const proxyUrl = 'http://579DA4DFB3XXcYxyCF:UBz7uCZi1HYs@daatc-2975.px.digitalartscloud.com:443';
+const agent = new HttpsProxyAgent(proxyUrl);
 
-// ミドルウェア設定
+// CORS 有効化
 app.use(cors());
+
+// 静的ファイル配信
 app.use(express.static(path.join(__dirname, 'public')));
 
-// HTML内のURLを書き換える関数
+// URL書き換え関数（HTML内のリンクを /fetch?url=〜 に変換）
 function rewriteUrls(html, baseUrl) {
-  // aタグ href属性
-  html = html.replace(/href\s*=\s*"(.*?)"/gi, (match, url) => {
-    try {
-      const absUrl = new URL(url, baseUrl).href;
-      return `href="/fetch?url=${encodeURIComponent(absUrl)}"`;
-    } catch {
-      return match;
-    }
-  });
+  const base = new URL(baseUrl);
 
-  // imgタグ src属性
-  html = html.replace(/<img\s+[^>]*src\s*=\s*"([^"]*)"/gi, (match, url) => {
-    try {
-      const absUrl = new URL(url, baseUrl).href;
-      return match.replace(url, `/fetch?url=${encodeURIComponent(absUrl)}`);
-    } catch {
-      return match;
-    }
-  });
+  const replaceAttr = (html, tag, attr) => {
+    const regex = new RegExp(`<${tag}\\b[^>]*\\b${attr}\\s*=\\s*"(.*?)"`, 'gi');
+    return html.replace(regex, (match, url) => {
+      try {
+        const absUrl = new URL(url, base).href;
+        return match.replace(url, `/fetch?url=${encodeURIComponent(absUrl)}`);
+      } catch {
+        return match;
+      }
+    });
+  };
 
-  // scriptタグ src属性
-  html = html.replace(/<script\s+[^>]*src\s*=\s*"([^"]*)"/gi, (match, url) => {
-    try {
-      const absUrl = new URL(url, baseUrl).href;
-      return match.replace(url, `/fetch?url=${encodeURIComponent(absUrl)}`);
-    } catch {
-      return match;
-    }
-  });
-
-  // linkタグ href属性（CSSなど）
-  html = html.replace(/<link\s+[^>]*href\s*=\s*"([^"]*)"/gi, (match, url) => {
-    try {
-      const absUrl = new URL(url, baseUrl).href;
-      return match.replace(url, `/fetch?url=${encodeURIComponent(absUrl)}`);
-    } catch {
-      return match;
-    }
-  });
+  html = replaceAttr(html, 'a', 'href');
+  html = replaceAttr(html, 'img', 'src');
+  html = replaceAttr(html, 'script', 'src');
+  html = replaceAttr(html, 'link', 'href');
 
   return html;
 }
 
-// /fetch API - プロキシ経由で外部URLを取得してレスポンスを返す
+// /fetch エンドポイント
 app.get('/fetch', async (req, res) => {
   const targetUrl = req.query.url;
-  if (!targetUrl) {
-    return res.status(400).send('Missing ?url= parameter');
-  }
+  if (!targetUrl) return res.status(400).send('Missing ?url= parameter');
 
   try {
-    const agent = new HttpsProxyAgent(proxyUrl);
-
     const response = await axios.get(targetUrl, {
+      responseType: 'arraybuffer',
       httpsAgent: agent,
       timeout: 8000,
-      responseType: 'text',
-      transformResponse: [(data) => data], // 生テキストのまま取得
-      validateStatus: () => true, // ステータスコード400以上も受け取る（自前で判定可能に）
     });
 
-    if (response.status >= 400) {
-      res.status(response.status).send(`Failed to fetch URL: HTTP ${response.status}`);
-      return;
-    }
+    const contentType = response.headers['content-type'] || 'application/octet-stream';
 
-    let body = response.data;
-
-    // Content-TypeがHTMLならURLを書き換え
-    const contentType = response.headers['content-type'] || '';
+    // HTMLならリンク書き換え
     if (contentType.includes('text/html')) {
-      body = rewriteUrls(body, targetUrl);
+      const html = response.data.toString('utf-8');
+      const rewritten = rewriteUrls(html, targetUrl);
       res.set('Content-Type', 'text/html; charset=UTF-8');
-      res.send(body);
-      return;
+      res.send(rewritten);
+    } else {
+      // HTML以外（画像など）はそのまま中継
+      res.set(response.headers);
+      res.send(response.data);
     }
-
-    // それ以外はヘッダーとデータをそのまま返す（画像など）
-    Object.entries(response.headers).forEach(([key, value]) => {
-      res.setHeader(key, value);
-    });
-
-    res.status(response.status).send(body);
   } catch (err) {
-    console.error('Error fetching URL:', err.message);
-    res.status(500).send('Failed to fetch URL through proxy.');
+    console.error('Fetch error:', err.message);
+    res.status(500).send(`Failed to fetch: ${err.message}`);
   }
 });
 
 // サーバー起動
 app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+  console.log(`Server running at http://localhost:${PORT}`);
 });
