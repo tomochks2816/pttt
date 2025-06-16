@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>URLフェッチツール</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 2rem;
+      max-width: 600px;
+      margin: auto;
+    }
+    input, button {
+      font-size: 1rem;
+      padding: 0.5rem;
+      margin-right: 0.5rem;
+    }
+    #response {
+      white-space: pre-wrap;
+      margin-top: 1rem;
+      background: #f0f0f0;
+      padding: 1rem;
+      border-radius: 8px;
+    }
+  </style>
+</head>
+<body>
+  <h1>/fetch?url=ツール</h1>
+  <input id="urlInput" type="text" placeholder="URLを入力" size="40" />
+  <button onclick="fetchURL()">取得</button>
+
+  <div id="response">レスポンスがここに表示されます</div>
+
+  <script>
+    async function fetchURL() {
+      const input = document.getElementById('urlInput');
+      const url = input.value.trim();
+
+      if (!url) {
+        alert("URLを入力してください");
+        return;
+      }
+
+      try {
+        const res = await fetch(`/fetch?url=${encodeURIComponent(url)}`);
+        if (!res.ok) throw new Error(`HTTPエラー: ${res.status}`);
+
+        const text = await res.text();
+        document.getElementById('response').textContent = text;
+      } catch (err) {
+        console.error(err);
+        document.getElementById('response').textContent = `エラーが発生しました: ${err.message}`;
+      }
+    }
+  </script>
+</body>
+</html>
