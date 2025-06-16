@@ -21,23 +21,32 @@ app.use(cors());
 // 静的ファイル（public フォルダ）を配信
 app.use(express.static(path.join(__dirname, 'public')));
 
-// /fetch エンドポイント
 app.get('/fetch', async (req, res) => {
   const targetUrl = req.query.url;
   if (!targetUrl) return res.status(400).send('Missing ?url= parameter');
 
   try {
     const agent = new HttpsProxyAgent(proxyUrl);
-    const response = await axios.get(targetUrl, {
+
+    const response = await axios({
+      method: 'get',
+      url: targetUrl,
+      responseType: 'stream', // 重要：ストリームで受け取る
       httpsAgent: agent,
       timeout: 8000,
     });
-    res.send(response.data);
+
+    // 重要：ヘッダーをコピーしてクライアントに正しく伝える
+    res.set(response.headers);
+
+    // ストリーミングでレスポンスを転送
+    response.data.pipe(res);
   } catch (err) {
     console.error('Error fetching URL:', err.message);
     res.status(500).send('Failed to fetch URL through proxy.');
   }
 });
+
 
 // サーバー起動
 app.listen(PORT, () => {
