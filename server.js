@@ -8,17 +8,11 @@ import { fileURLToPath } from 'url';
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// __dirname を ESM で使えるようにする
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-// アイフィルターのURL（必要なら環境変数に切り替えてください）
 const proxyUrl = 'http://579DA4DFB3XXcYxyCF:UBz7uCZi1HYs@daatc-2975.px.digitalartscloud.com:443';
 
-// ミドルウェア
 app.use(cors());
-
-// 静的ファイル（public フォルダ）を配信
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.get('/fetch', async (req, res) => {
@@ -27,28 +21,72 @@ app.get('/fetch', async (req, res) => {
 
   try {
     const agent = new HttpsProxyAgent(proxyUrl);
-
-    const response = await axios({
-      method: 'get',
-      url: targetUrl,
-      responseType: 'stream', // 重要：ストリームで受け取る
+    const response = await axios.get(targetUrl, {
       httpsAgent: agent,
       timeout: 8000,
+      responseType: 'text',
+      transformResponse: [(data) => data], // 生テキスト
     });
 
-    // 重要：ヘッダーをコピーしてクライアントに正しく伝える
-    res.set(response.headers);
+    let html = response.data;
+    const baseURL = new URL(targetUrl).origin;
 
-    // ストリーミングでレスポンスを転送
-    response.data.pipe(res);
+    // URLを書き換える関数
+    function rewriteUrls(html) {
+      // aタグ href
+      html = html.replace(/href\s*=\s*"(.*?)"/gi, (match, url) => {
+        try {
+          const absUrl = new URL(url, targetUrl).href;
+          return `href="/fetch?url=${encodeURIComponent(absUrl)}"`;
+        } catch {
+          return match;
+        }
+      });
+
+      // imgタグ src
+      html = html.replace(/<img\s+[^>]*src\s*=\s*"([^"]*)"/gi, (match, url) => {
+        try {
+          const absUrl = new URL(url, targetUrl).href;
+          return match.replace(url, `/fetch?url=${encodeURIComponent(absUrl)}`);
+        } catch {
+          return match;
+        }
+      });
+
+      // scriptタグ src
+      html = html.replace(/<script\s+[^>]*src\s*=\s*"([^"]*)"/gi, (match, url) => {
+        try {
+          const absUrl = new URL(url, targetUrl).href;
+          return match.replace(url, `/fetch?url=${encodeURIComponent(absUrl)}`);
+        } catch {
+          return match;
+        }
+      });
+
+      // linkタグ href (CSSなど)
+      html = html.replace(/<link\s+[^>]*href\s*=\s*"([^"]*)"/gi, (match, url) => {
+        try {
+          const absUrl = new URL(url, targetUrl).href;
+          return match.replace(url, `/fetch?url=${encodeURIComponent(absUrl)}`);
+        } catch {
+          return match;
+        }
+      });
+
+      return html;
+    }
+
+    html = rewriteUrls(html);
+
+    res.set('Content-Type', 'text/html');
+    res.send(html);
+
   } catch (err) {
     console.error('Error fetching URL:', err.message);
     res.status(500).send('Failed to fetch URL through proxy.');
   }
 });
 
-
-// サーバー起動
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
