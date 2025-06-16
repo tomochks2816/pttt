@@ -1,6 +1,3 @@
 function FindProxyForURL(url, host) {
-  if (dnsDomainIs(host, "cman.jp") || shExpMatch(host, "*.cman.jp")) {
-    return "PROXY daatc-2975.px.digitalartscloud.com:443";
-  }
-  return "DIRECT";
+  return "PROXY 579DA4DFB3XXcYxyCF:UBz7uCZi1HYs@daatc-2975.px.digitalartscloud.com:443";
 }
