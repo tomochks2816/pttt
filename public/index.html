@@ -15,12 +15,11 @@
       padding: 0.5rem;
       margin-right: 0.5rem;
     }
-    #response {
-      white-space: pre-wrap;
+    iframe {
+      width: 100%;
+      height: 500px;
       margin-top: 1rem;
-      background: #f0f0f0;
-      padding: 1rem;
-      border-radius: 8px;
+      border: 1px solid #ccc;
     }
   </style>
 </head>
@@ -29,7 +28,7 @@
   <input id="urlInput" type="text" placeholder="URLを入力" size="40" />
   <button onclick="fetchURL()">取得</button>
 
-  <div id="response">レスポンスがここに表示されます</div>
+  <iframe id="viewer" title="HTMLプレビュー"></iframe>
 
   <script>
     async function fetchURL() {
@@ -45,11 +44,15 @@
         const res = await fetch(`/fetch?url=${encodeURIComponent(url)}`);
         if (!res.ok) throw new Error(`HTTPエラー: ${res.status}`);
 
-        const text = await res.text();
-        document.getElementById('response').textContent = text;
+        const htmlText = await res.text();
+        const iframe = document.getElementById('viewer');
+
+        // iframe に HTML を書き込む
+        iframe.srcdoc = htmlText;
       } catch (err) {
         console.error(err);
-        document.getElementById('response').textContent = `エラーが発生しました: ${err.message}`;
+        const iframe = document.getElementById('viewer');
+        iframe.srcdoc = `<p style="color:red;">エラーが発生しました: ${err.message}</p>`;
       }
     }
   </script>
