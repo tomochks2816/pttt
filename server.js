@@ -11,7 +11,7 @@ const PORT = process.env.PORT || 3000;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// 任意のプロキシ設定（必要な場合）
+// プロキシ設定
 const proxyUrl = 'http://579DA4DFB3XXcYxyCF:UBz7uCZi1HYs@daatc-2975.px.digitalartscloud.com:443';
 const agent = new HttpsProxyAgent(proxyUrl);
 
@@ -19,7 +19,6 @@ const agent = new HttpsProxyAgent(proxyUrl);
 app.use(cors());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// JSONやURLエンコードされた本文を許可
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -47,7 +46,6 @@ function rewriteUrls(html, baseUrl) {
   html = replaceAttr(html, 'audio', 'src');
   html = replaceAttr(html, 'source', 'src');
 
-  // meta refresh
   html = html.replace(/<meta\s+http-equiv=["']refresh["']\s+content=["'][^;]+;\s*url=([^"']+)["']/gi, (match, url) => {
     try {
       const absUrl = new URL(url, base).href;
@@ -57,7 +55,7 @@ function rewriteUrls(html, baseUrl) {
     }
   });
 
-  // CSP緩和：metaタグの削除
+  // metaタグの削除
   html = html.replace(/<meta[^>]+http-equiv=["']Content-Security-Policy["'][^>]*>/gi, '');
 
   return html;
@@ -98,7 +96,6 @@ function extractBaseHref(html, fallbackUrl) {
   return fallbackUrl;
 }
 
-// ✅ すべてのHTTPメソッド対応
 app.all('/fetch', async (req, res) => {
   const targetUrl = req.query.url;
   if (!targetUrl) return res.status(400).send('Missing ?url= parameter');
@@ -110,11 +107,11 @@ app.all('/fetch', async (req, res) => {
       host: new URL(targetUrl).host,
       referer: targetUrl,
       origin: new URL(targetUrl).origin,
-      'Accept-Encoding': 'identity', // gzip解除（バイナリ安定）
+      'Accept-Encoding': 'identity', 
     };
 
     delete headers['accept-encoding'];
-    delete headers['content-length']; // axiosが自動で設定するため
+    delete headers['content-length']; 
 
     const response = await axios({
       method,
@@ -134,7 +131,7 @@ app.all('/fetch', async (req, res) => {
       const baseHref = extractBaseHref(html, targetUrl);
       const rewritten = rewriteUrls(html, baseHref);
       res.set('Content-Type', 'text/html; charset=UTF-8');
-      // Set-Cookie 転送
+      // Cookie 転送
       const setCookies = response.headers['set-cookie'];
       if (setCookies) res.setHeader('Set-Cookie', setCookies);
       res.status(response.status).send(rewritten);
@@ -146,7 +143,7 @@ app.all('/fetch', async (req, res) => {
       res.set('Content-Type', 'text/css; charset=UTF-8');
       res.status(response.status).send(rewritten);
     }
-    // その他はそのまま転送
+    // その他はそのまま
     else {
       const headersToSend = { ...response.headers };
       delete headersToSend['content-encoding'];
@@ -159,7 +156,6 @@ app.all('/fetch', async (req, res) => {
   }
 });
 
-// 起動
 app.listen(PORT, () => {
-  console.log(`🚀 Fully featured proxy running at http://localhost:${PORT}`);
+  console.log(`🚀 起動しました。 ポート:${PORT}`);
 });
