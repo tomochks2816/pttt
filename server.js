@@ -12,7 +12,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // プロキシ設定(直書きなのは見なかったことにして、)
-const proxyUrl = 'http://579DA4DFB3XXcYxyCF:UBz7uCZi1HYs@daatc-2975.px.digitalartscloud.com:443';
+const proxyUrl = 'http://siawaseok0207:siawaseok0207@siawaseok.duckdns.org:3128';
 const agent = new HttpsProxyAgent(proxyUrl);
 
 // 静的ファイル
