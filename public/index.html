@@ -30,30 +30,31 @@
   <iframe id="viewer" title="HTMLプレビュー"></iframe>
 
   <script>
-    async function fetchURL() {
-      const input = document.getElementById('urlInput');
-      const url = input.value.trim();
+  async function fetchURL() {
+  const input = document.getElementById('urlInput');
+  const url = input.value.trim();
+  const iframe = document.getElementById('viewer');
 
-      if (!url) {
-        alert("URLを入力してください");
-        return;
-      }
+  if (!url) {
+    alert("URLを入力してください");
+    return;
+  }
 
-      try {
-        const res = await fetch(`/fetch?url=${encodeURIComponent(url)}`);
-        if (!res.ok) throw new Error(`HTTPエラー: ${res.status}`);
+  // 🔽 読み込み中表示
+  iframe.srcdoc = `<p style="font-size:1.2em;">読み込み中...</p>`;
 
-        const htmlText = await res.text();
-        const iframe = document.getElementById('viewer');
+  try {
+    const res = await fetch(`/fetch?url=${encodeURIComponent(url)}`);
+    if (!res.ok) throw new Error(`HTTPエラー: ${res.status}`);
 
-        // iframe に HTML を書き込む
-        iframe.srcdoc = htmlText;
-      } catch (err) {
-        console.error(err);
-        const iframe = document.getElementById('viewer');
-        iframe.srcdoc = `<p style="color:red;">エラーが発生しました: ${err.message}</p>`;
-      }
-    }
+    const htmlText = await res.text();
+    iframe.srcdoc = htmlText;
+  } catch (err) {
+    console.error(err);
+    iframe.srcdoc = `<p style="color:red;">エラーが発生しました: ${err.message}</p>`;
+  }
+}
+
   </script>
 </body>
 </html>
