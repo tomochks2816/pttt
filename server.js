@@ -8,24 +8,23 @@ import { fileURLToPath } from 'url';
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// __dirname 対応（ESM）
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// プロキシ設定（必要なら設定）
+// 任意のプロキシ設定（必要な場合）
 const proxyUrl = 'http://579DA4DFB3XXcYxyCF:UBz7uCZi1HYs@daatc-2975.px.digitalartscloud.com:443';
 const agent = new HttpsProxyAgent(proxyUrl);
 
-// ミドルウェア
+// 静的ファイル
 app.use(cors());
 app.use(express.static(path.join(__dirname, 'public')));
 
-//
-// 🔧 HTML の中のリンクを /fetch?url=... に書き換える
-//
+// JSONやURLエンコードされた本文を許可
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
 function rewriteUrls(html, baseUrl) {
   const base = new URL(baseUrl);
-
   const replaceAttr = (html, tag, attr) => {
     const regex = new RegExp(`<${tag}\\b[^>]*\\b${attr}\\s*=\\s*["']([^"']+)["']`, 'gi');
     return html.replace(regex, (match, url) => {
@@ -38,21 +37,36 @@ function rewriteUrls(html, baseUrl) {
     });
   };
 
+  // タグ属性URL変換
   html = replaceAttr(html, 'a', 'href');
   html = replaceAttr(html, 'img', 'src');
   html = replaceAttr(html, 'script', 'src');
   html = replaceAttr(html, 'link', 'href');
   html = replaceAttr(html, 'iframe', 'src');
+  html = replaceAttr(html, 'video', 'src');
+  html = replaceAttr(html, 'audio', 'src');
+  html = replaceAttr(html, 'source', 'src');
+
+  // meta refresh
+  html = html.replace(/<meta\s+http-equiv=["']refresh["']\s+content=["'][^;]+;\s*url=([^"']+)["']/gi, (match, url) => {
+    try {
+      const absUrl = new URL(url, base).href;
+      return match.replace(url, `/fetch?url=${encodeURIComponent(absUrl)}`);
+    } catch {
+      return match;
+    }
+  });
+
+  // CSP緩和：metaタグの削除
+  html = html.replace(/<meta[^>]+http-equiv=["']Content-Security-Policy["'][^>]*>/gi, '');
 
   return html;
 }
 
-//
-// 🔧 CSSの中の url(...) を /fetch?url=... に変換
-//
 function rewriteCssUrls(cssText, baseUrl) {
   const base = new URL(baseUrl);
-  return cssText.replace(/url\((['"]?)([^'")]+)\1\)/g, (match, quote, url) => {
+
+  cssText = cssText.replace(/url\((['"]?)([^'")]+)\1\)/g, (match, quote, url) => {
     try {
       const absUrl = new URL(url, base).href;
       return `url(${quote}/fetch?url=${encodeURIComponent(absUrl)}${quote})`;
@@ -60,11 +74,20 @@ function rewriteCssUrls(cssText, baseUrl) {
       return match;
     }
   });
+
+  // @import 処理
+  cssText = cssText.replace(/@import\s+(?:url\()?['"]([^'"]+)['"]\)?/g, (match, url) => {
+    try {
+      const absUrl = new URL(url, base).href;
+      return `@import url("/fetch?url=${encodeURIComponent(absUrl)}")`;
+    } catch {
+      return match;
+    }
+  });
+
+  return cssText;
 }
 
-//
-// 🔍 HTML内の <base href="..."> を取得してURL基準を調整
-//
 function extractBaseHref(html, fallbackUrl) {
   const match = html.match(/<base\s+href="([^"]+)"/i);
   if (match) {
@@ -75,48 +98,68 @@ function extractBaseHref(html, fallbackUrl) {
   return fallbackUrl;
 }
 
-//
-// 🔄 /fetch API（プロキシとして機能）
-//
-app.get('/fetch', async (req, res) => {
+// ✅ すべてのHTTPメソッド対応
+app.all('/fetch', async (req, res) => {
   const targetUrl = req.query.url;
   if (!targetUrl) return res.status(400).send('Missing ?url= parameter');
 
   try {
-    const response = await axios.get(targetUrl, {
-      responseType: 'arraybuffer', // HTMLもCSSも画像も扱えるように
+    const method = req.method;
+    const headers = {
+      ...req.headers,
+      host: new URL(targetUrl).host,
+      referer: targetUrl,
+      origin: new URL(targetUrl).origin,
+      'Accept-Encoding': 'identity', // gzip解除（バイナリ安定）
+    };
+
+    delete headers['accept-encoding'];
+    delete headers['content-length']; // axiosが自動で設定するため
+
+    const response = await axios({
+      method,
+      url: targetUrl,
+      data: req.body,
+      headers,
+      responseType: 'arraybuffer',
       httpsAgent: agent,
-      timeout: 10000,
+      validateStatus: () => true, // 全ステータス通す
     });
 
     const contentType = response.headers['content-type'] || 'application/octet-stream';
 
+    // HTMLの変換処理
     if (contentType.includes('text/html')) {
       const html = response.data.toString('utf-8');
       const baseHref = extractBaseHref(html, targetUrl);
       const rewritten = rewriteUrls(html, baseHref);
       res.set('Content-Type', 'text/html; charset=UTF-8');
-      res.send(rewritten);
-    } else if (contentType.includes('text/css')) {
+      // Set-Cookie 転送
+      const setCookies = response.headers['set-cookie'];
+      if (setCookies) res.setHeader('Set-Cookie', setCookies);
+      res.status(response.status).send(rewritten);
+    }
+    // CSSの変換処理
+    else if (contentType.includes('text/css')) {
       const css = response.data.toString('utf-8');
       const rewritten = rewriteCssUrls(css, targetUrl);
       res.set('Content-Type', 'text/css; charset=UTF-8');
-      res.send(rewritten);
-    } else {
-      // 画像などその他リソースはそのまま
-      res.set(response.headers);
-      res.send(response.data);
+      res.status(response.status).send(rewritten);
     }
-
+    // その他はそのまま転送
+    else {
+      const headersToSend = { ...response.headers };
+      delete headersToSend['content-encoding'];
+      res.set(headersToSend);
+      res.status(response.status).send(response.data);
+    }
   } catch (err) {
-    console.error('Fetch error:', err.message);
-    res.status(500).send(`Failed to fetch: ${err.message}`);
+    console.error('Proxy error:', err.message);
+    res.status(500).send(`Proxy failed: ${err.message}`);
   }
 });
 
-//
-// ✅ サーバー起動
-//
+// 起動
 app.listen(PORT, () => {
-  console.log(`🚀 Server running at http://localhost:${PORT}`);
+  console.log(`🚀 Fully featured proxy running at http://localhost:${PORT}`);
 });
