@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>URLフェッチツール</title>
+  <title>プロキシ</title>
   <style>
     body {
       font-family: sans-serif;
@@ -30,31 +30,29 @@
   <iframe id="viewer" title="HTMLプレビュー"></iframe>
 
   <script>
-  async function fetchURL() {
-  const input = document.getElementById('urlInput');
-  const url = input.value.trim();
-  const iframe = document.getElementById('viewer');
+    async function fetchURL() {
+    const input = document.getElementById('urlInput');
+    const url = input.value.trim();
+    const iframe = document.getElementById('viewer');
 
-  if (!url) {
-    alert("URLを入力してください");
-    return;
+    if (!url) {
+      alert("URLを入力してください");
+      return;
+    }
+
+    iframe.srcdoc = `<p style="font-size:1.2em;">読み込み中...</p>`;
+
+    try {
+      const res = await fetch(`/fetch?url=${encodeURIComponent(url)}`);
+      if (!res.ok) throw new Error(`HTTPエラー: ${res.status}`);
+
+      const htmlText = await res.text();
+      iframe.srcdoc = htmlText;
+    } catch (err) {
+      console.error(err);
+      iframe.srcdoc = `<p style="color:red;">エラーが発生しました: ${err.message}</p>`;
+    }
   }
-
-  // 🔽 読み込み中表示
-  iframe.srcdoc = `<p style="font-size:1.2em;">読み込み中...</p>`;
-
-  try {
-    const res = await fetch(`/fetch?url=${encodeURIComponent(url)}`);
-    if (!res.ok) throw new Error(`HTTPエラー: ${res.status}`);
-
-    const htmlText = await res.text();
-    iframe.srcdoc = htmlText;
-  } catch (err) {
-    console.error(err);
-    iframe.srcdoc = `<p style="color:red;">エラーが発生しました: ${err.message}</p>`;
-  }
-}
-
-  </script>
+</script>
 </body>
 </html>
